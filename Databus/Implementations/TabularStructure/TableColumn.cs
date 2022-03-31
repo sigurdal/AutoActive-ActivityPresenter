@@ -86,9 +86,9 @@ namespace SINTEF.AutoActive.Databus.Implementations.TabularStructure
     public abstract class TableColumnViewer : ITimeSeriesViewer
     {
         protected TableTimeIndex Index;
-        protected int StartIndex = -1;
-        protected int EndIndex = -1;
-        protected int Length = -1;
+        protected int Length => EndIndex - StartIndex + 1;
+        public int StartIndex { get; private set; }
+        public int EndIndex { get; private set; }
 
         public long PreviewPercentage { get; set; }
 
@@ -114,7 +114,6 @@ namespace SINTEF.AutoActive.Databus.Implementations.TabularStructure
 
             StartIndex = start;
             EndIndex = end;
-            Length = EndIndex - StartIndex + 1;
             Changed?.Invoke(this, EventArgs.Empty);
         }
 

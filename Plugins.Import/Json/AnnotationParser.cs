@@ -63,14 +63,14 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
                 var annotationSet = value;
                 var annotations = annotationSet.Annotations;
 
-                _timeData = annotations.Select(annotation => annotation.Timestamp).ToList();
-                _annotationData = annotations.Select(annotation => annotation.Type).ToList();
+                _timeData = annotations.Select(annotation => annotation.Timestamp).ToArray();
+                _annotationData = annotations.Select(annotation => annotation.Type).ToArray();
 
                 IsSaved = false;
 
                 var isWorldSynchronized = annotationSet.IsWorldSynchronized;
 
-                _timePoint = new BaseTimePoint(_timeData, isWorldSynchronized);
+                _timePoint = new AnnotationTimePoint(annotationSet, _timeData, isWorldSynchronized);
 
                 var uri = "Annotations";
                 _dataPoint = new AnnotationDataPoint("Annotations", _annotationData, annotationSet, _timePoint, uri, null);
@@ -81,9 +81,9 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
         }
         private AnnotationSet _annotationsBacking;
 
-        private List<long> _timeData;
-        private List<int> _annotationData;
-        private BaseTimePoint _timePoint;
+        private long[] _timeData;
+        private int[] _annotationData;
+        private AnnotationTimePoint _timePoint;
         private AnnotationDataPoint _dataPoint;
 
         public AnnotationDataPoint DataPoint => _dataPoint;
@@ -121,8 +121,6 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
 
         public void AddAnnotation(long timestamp, int annotationId)
         {
-            _timeData.Add(timestamp);
-            _annotationData.Add(annotationId);
             AnnotationSet.Annotations.Add(new AnnotationPoint(timestamp, annotationId));
             _timePoint.TriggerChanged();
             _dataPoint.TriggerDataChanged();
@@ -208,17 +206,6 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
         {
             AnnotationSet.Annotations.Remove(annotationPoint);
 
-
-            for (var i = 0; i < _timeData.Count; i++)
-            {
-                if (_timeData[i] == annotationPoint.Timestamp && _annotationData[i] == annotationPoint.Type)
-                {
-                    _timeData.RemoveAt(i);
-                    _annotationData.RemoveAt(i);
-                    break;
-                }
-            }
-
             _timePoint.TriggerChanged();
             _dataPoint.TriggerDataChanged();
             IsSaved = false;
@@ -240,26 +227,86 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
         }
     }
 
+
+    public class AnnotationTimePoint : BaseTimePoint
+    {
+        private AnnotationSet _annotationSet;
+        private long[] _data;
+        public override long[] Data
+        {
+            get
+            {
+                return _annotationSet.Annotations.Select(annotation => annotation.Timestamp).ToArray();
+                if (_data != null) return _data;
+
+                if (_annotationSet == null)
+                    return null;
+
+                _data = _annotationSet.Annotations.Select(annotation => annotation.Timestamp).ToArray();
+
+                return _data;
+            }
+            protected set
+            {
+                _data = value;
+            }
+        }
+
+        public AnnotationTimePoint(AnnotationSet annotationSet, long[] data, bool isSynchronizedToWorldClock) : base(data, isSynchronizedToWorldClock)
+        {
+            _annotationSet = annotationSet;
+        }
+
+        public override void TriggerChanged()
+        {
+            _data = null;
+            base.TriggerChanged();
+        }
+
+    }
+
     public class AnnotationDataPoint : BaseDataPoint<int>
     {
+        private int[] _data;
+        public override int[] Data
+        {
+            get
+            {
+                return AnnotationSet.Annotations.Select(annotation => annotation.Type).ToArray();
+                if (_data != null) return _data;
+                
+                if (AnnotationSet == null) return null;
+
+                _data = AnnotationSet.Annotations.Select(annotation => annotation.Type).ToArray();
+                
+                return _data;
+            }
+            protected set { _data = value; }
+        }
+
         private readonly Task<AnnotationSet> _annotationSetLoader;
 
         private AnnotationSet _annotationSet;
 
         public AnnotationSet AnnotationSet => _annotationSet;
 
-        public AnnotationDataPoint(string name, Task<List<int>> loader, Task<AnnotationSet> annotationSetLoader, BaseTimePoint time, string uri, string unit) : base(name, loader, time, uri, unit)
+        public AnnotationDataPoint(string name, Task<int[]> loader, Task<AnnotationSet> annotationSetLoader, AnnotationTimePoint time, string uri, string unit) : base(name, loader, time, uri, unit)
         {
             _annotationSetLoader = annotationSetLoader;
         }
 
-        public AnnotationDataPoint(string name, List<int> data, AnnotationSet annotationSet, BaseTimePoint time, string uri, string unit) : base(name, data, time, uri, unit)
+        public AnnotationDataPoint(string name, int[] data, AnnotationSet annotationSet, AnnotationTimePoint time, string uri, string unit) : base(name, data, time, uri, unit)
         {
             _annotationSet = annotationSet;
         }
 
-        protected override BaseDataViewer CreateDataViewer()
+        protected async override Task<BaseDataViewer> CreateDataViewer()
         {
+            if (Data == null && DataLoader != null)
+            {
+                Data = await DataLoader;
+            }
+
             if (_annotationSet == null && _annotationSetLoader != null)
             {
                 _annotationSetLoader.Wait();
@@ -267,9 +314,14 @@ namespace SINTEF.AutoActive.Plugins.Import.Json
             }
             return new AnnotationDataViewer(new BaseTimeViewer(Time), this);
         }
+        public override void TriggerDataChanged()
+        {
+            Data = null;
+            base.TriggerDataChanged();
+        }
     }
 
-    public class AnnotationDataViewer : BaseTimeSeriesViewer<int>
+    public class AnnotationDataViewer : GenericTimeSeriesViewer<int>
     {
         private AnnotationDataPoint _annotationDataPoint;
         public AnnotationSet AnnotationSet => _annotationDataPoint.AnnotationSet;

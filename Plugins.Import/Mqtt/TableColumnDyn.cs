@@ -93,11 +93,9 @@ namespace SINTEF.AutoActive.Plugins.Import.Mqtt
     public abstract class TableColumnDynViewer : ITimeSeriesViewer, IDynDataViewer
     {
         protected TableTimeIndexDyn index;
-        protected int startIndex = -1;
-        protected int endIndex = -1;
-        //protected double lastFrom = 0;
-        //protected double lastTo = 0;
-        protected int length = -1;
+        public int StartIndex { get; private set; }
+        public int EndIndex { get; private set; }
+        public int Length => EndIndex - StartIndex +1;
 
         //public delegate void DataChangedHandler();
         //event DataChangedHandler DataChanged;
@@ -114,18 +112,17 @@ namespace SINTEF.AutoActive.Plugins.Import.Mqtt
             var diff = to - from;
             var startTime = from - diff * PreviewPercentage / 100;
             var endTime = startTime + diff;
-            var start = index.FindIndex(startIndex, startTime);
-            var end = index.FindIndex(endIndex, endTime);
+            var start = index.FindIndex(StartIndex, startTime);
+            var end = index.FindIndex(EndIndex, endTime);
             CurrentTimeRangeFrom = from;
             CurrentTimeRangeTo = to;
             //lastTo = to;
             //lastFrom = from;
             //Debug.WriteLine("TableColumnDynViewer::RangeUpdated " + this.Column.Name + " " + from + " " + to + " " + startIndex + " " + endIndex);
-            if (start != startIndex || end != endIndex)
+            if (start != StartIndex || end != EndIndex)
             {
-                startIndex = start;
-                endIndex = end;
-                length = endIndex - startIndex + 1;
+                StartIndex = start;
+                EndIndex = end;
                 Debug.WriteLine("TableColumnDynViewer::SetTimeRange   Changed " + this.Column.Name);
                 Changed?.Invoke(this, EventArgs.Empty);
             }
@@ -137,13 +134,12 @@ namespace SINTEF.AutoActive.Plugins.Import.Mqtt
             //TODO Fixme HasDataRangeChanged?.Invoke(from, to);
 
             // Update visible data range if changed
-            var start = index.FindIndex(startIndex, CurrentTimeRangeFrom);
-            var end = index.FindIndex(endIndex, CurrentTimeRangeTo);
-            if (start != startIndex || end != endIndex)
+            var start = index.FindIndex(StartIndex, CurrentTimeRangeFrom);
+            var end = index.FindIndex(EndIndex, CurrentTimeRangeTo);
+            if (start != StartIndex || end != EndIndex)
             {
-                startIndex = start;
-                endIndex = end;
-                length = endIndex - startIndex + 1;
+                StartIndex = start;
+                EndIndex = end;
                 //Debug.WriteLine("TableColumnDynViewer::UpdatedData   Changed " + this.Column.Name);
                 Changed?.Invoke(this, EventArgs.Empty);
             }

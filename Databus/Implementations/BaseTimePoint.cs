@@ -11,18 +11,18 @@ namespace SINTEF.AutoActive.Databus.Implementations
         protected readonly List<ITimeViewer> _viewers = new List<ITimeViewer>();
         public bool IsSynchronizedToWorldClock { get; set; }
 
-        public List<long> Data { get; private set; }
-        public Task<List<long>> DataLoader;
+        public virtual long[] Data { get; protected set; }
+        public Task<long[]> DataLoader;
         protected bool _isDataLoaded = false;
 
-        public BaseTimePoint(List<long> data, bool isSynchronizedToWorldClock)
+        public BaseTimePoint(long[] data, bool isSynchronizedToWorldClock)
         {
             Data = data;
             _isDataLoaded = true;
             IsSynchronizedToWorldClock = isSynchronizedToWorldClock;
         }
 
-        public BaseTimePoint(Task<List<long>> dataLoader, bool isSynchronizedToWorldClock)
+        public BaseTimePoint(Task<long[]> dataLoader, bool isSynchronizedToWorldClock)
         {
             _isDataLoaded = true;
             DataLoader = dataLoader;
@@ -51,7 +51,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
         public void TransformTime(long offset, double scale)
         {
-            for (var i = 0; i < Data.Count; i++)
+            for (var i = 0; i < Data.Length; i++)
             {
                 Data[i] = (long)(Data[i] * scale + offset);
             }
@@ -69,7 +69,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
             {
                 if (!_start.HasValue)
                 {
-                    if (Data.Count == 0)
+                    if (Data.Length == 0)
                     {
                         return 0;
                     }
@@ -86,7 +86,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
             {
                 if (!_end.HasValue)
                 {
-                    if (Data.Count == 0)
+                    if (Data.Length == 0)
                     {
                         return 0;
                     }
@@ -96,7 +96,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
             }
         }
 
-        public void TriggerChanged()
+        public virtual void TriggerChanged()
         {
             _start = null;
             _end = null;
@@ -109,7 +109,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
     public class BaseTimeViewer : ITimeViewer
     {
-        public List<long> Data => _timePoint.Data;
+        public long[] Data => _timePoint.Data;
         public BaseTimeViewer(BaseTimePoint timePoint)
         {
             _timePoint = timePoint;

@@ -6,7 +6,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 {
     public class BaseSortedTimePoint : BaseTimePoint
     {
-        public BaseSortedTimePoint(List<long> data, bool isSynchronizedToWoldClock) : base(data, isSynchronizedToWoldClock) { }
+        public BaseSortedTimePoint(long[] data, bool isSynchronizedToWoldClock) : base(data, isSynchronizedToWoldClock) { }
         public override async Task<ITimeViewer> CreateViewer()
         {
             // Ensure that the data is loaded
@@ -26,7 +26,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
         }
         public long Start => _timePoint.Data[0];
 
-        public long End => _timePoint.Data[_timePoint.Data.Count - 1];
+        public long End => _timePoint.Data[_timePoint.Data.Length - 1];
 
         public ITimePoint TimePoint => _timePoint;
 

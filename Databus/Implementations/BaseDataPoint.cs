@@ -11,9 +11,9 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
     public class BaseDataPoint<T> : IBaseDataPoint where T : IConvertible
     {
-        public List<T> Data { get; protected set; }
-        protected Task<List<T>> DataLoader;
-        public BaseDataPoint(string name, Task<List<T>> loader, BaseTimePoint time, string uri, string unit)
+        public virtual T[] Data { get; protected set; }
+        protected Task<T[]> DataLoader;
+        public BaseDataPoint(string name, Task<T[]> loader, BaseTimePoint time, string uri, string unit)
         {
             Name = name;
             DataLoader = loader;
@@ -23,7 +23,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
             Unit = unit;
         }
 
-        public BaseDataPoint(string name, List<T> data, BaseTimePoint time, string uri, string unit)
+        public BaseDataPoint(string name, T[] data, BaseTimePoint time, string uri, string unit)
         {
             Data = data;
             URI = uri;
@@ -50,7 +50,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
         public event EventHandler DataChanged;
 
-        protected virtual BaseDataViewer CreateDataViewer()
+        protected virtual async Task<BaseDataViewer> CreateDataViewer()
         {
             return new BaseDataViewer(new BaseTimeViewer(Time), this);
         }
@@ -62,12 +62,12 @@ namespace SINTEF.AutoActive.Databus.Implementations
                 Data = await DataLoader;
             }
 
-            var viewer = CreateDataViewer();
+            var viewer = await CreateDataViewer();
             _viewers.Add(viewer);
             return viewer;
         }
 
-        public void TriggerDataChanged()
+        public virtual void TriggerDataChanged()
         {
             foreach(var viewer in _viewers)
             {
@@ -79,7 +79,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
     public class BaseDataViewer : IDataViewer
     {
-        internal ITimeViewer TimeViewer;
+        protected ITimeViewer TimeViewer { get; }
         public BaseDataViewer(ITimeViewer timeViewer, IDataPoint dataPoint)
         {
             TimeViewer = timeViewer;
@@ -95,7 +95,7 @@ namespace SINTEF.AutoActive.Databus.Implementations
 
         public event EventHandler Changed;
 
-        public void SetTimeRange(long from, long to)
+        public virtual void SetTimeRange(long from, long to)
         {
             var diff = to - from;
             var startTime = from - diff * PreviewPercentage / 100;
@@ -113,47 +113,82 @@ namespace SINTEF.AutoActive.Databus.Implementations
         }
     }
 
-    public class BaseTimeSeriesViewer<T> : BaseDataViewer, ITimeSeriesViewer where T : IConvertible
+    public abstract class BaseTimeSeriesViewer : BaseDataViewer, ITimeSeriesViewer
     {
-        private readonly BaseDataPoint<T> _dataPoint;
-        private readonly BaseTimeViewer _timeViewer;
-        public BaseTimeSeriesViewer(BaseTimeViewer timeViewer, BaseDataPoint<T> dataPoint) : base(timeViewer, dataPoint)
+        protected new BaseTimeViewer TimeViewer { get; }
+        public BaseTimeSeriesViewer(BaseTimeViewer timeViewer, IDataPoint dataPoint) : base(timeViewer, dataPoint)
         {
-            _dataPoint = dataPoint;
-            _timeViewer = timeViewer;
+            TimeViewer = timeViewer;
         }
 
         public double? MinValueHint => null;
 
         public double? MaxValueHint => null;
 
-        public virtual List<T> GetSelectedData()
+        public int StartIndex { get; private set; }
+        public int EndIndex { get; private set; }
+        protected int Length => EndIndex - StartIndex + 1;
+
+        public override void SetTimeRange(long from, long to)
         {
-            return _dataPoint.Data;
+            var diff = to - from;
+            var startTime = from - diff * PreviewPercentage / 100;
+            var endTime = from + diff;
+
+            var start = FindClosestIndex(startTime);
+            var end = Math.Min(FindClosestIndex(endTime) + 1, TimeViewer.Data.Length - 1);
+
+            if (start == StartIndex && end == EndIndex) return;
+
+            StartIndex = start;
+            EndIndex = end;
+
+            base.SetTimeRange(from, to);
         }
 
-        public SpanPair<T2> GetCurrentData<T2>() where T2 : IConvertible
+        public abstract SpanPair<T1> GetCurrentData<T1>() where T1 : IConvertible;
+
+        private int FindClosestIndex(long value)
         {
-            if (typeof(T2) != typeof(T))
-                throw new ArgumentException();
-            if (_dataPoint.Data.Count <= 0) return new SpanPair<T2>();
+            var index = Array.BinarySearch(TimeViewer.Data, value);
 
+            // BinarySearch returns a 2's complement if the value was not found.
+            if (index < 0) index = ~index;
 
-            var elements = GetSelectedData();
-
-            var startIndex = 0;
-
-            Span<T2> data;
-            unsafe
-            {
-                var mem = elements.ToArray().AsMemory(0, elements.Count);
-                using (var pin = mem.Pin())
-                    data = new Span<T2>(pin.Pointer, elements.Count);
-            }
-            return new SpanPair<T2>(startIndex, _timeViewer.Data.ToArray().AsSpan(startIndex, elements.Count), data);
+            return index;
         }
 
         public SpanPair<bool> GetCurrentBools() { throw new NotImplementedException(); }
         public SpanPair<string> GetCurrentStrings() { throw new NotImplementedException(); }
+    }
+
+
+    public class GenericTimeSeriesViewer<T> : BaseTimeSeriesViewer, ITimeSeriesViewer where T : IConvertible
+    {
+        private readonly BaseDataPoint<T> _dataPoint;
+        public GenericTimeSeriesViewer(BaseTimeViewer timeViewer, BaseDataPoint<T> dataPoint) : base(timeViewer, dataPoint)
+        {
+            _dataPoint = dataPoint;
+        }
+
+        public override SpanPair<T1> GetCurrentData<T1>()
+        {
+            if (typeof(T1) != typeof(T))
+                throw new ArgumentException();
+            if (_dataPoint.Data.Length <= 0) return new SpanPair<T1>();
+
+            var elements = _dataPoint.Data;
+
+            var startIndex = 0;
+
+            Span<T1> data;
+            unsafe
+            {
+                var mem = elements.AsMemory(StartIndex, Length);
+                using (var pin = mem.Pin())
+                    data = new Span<T1>(pin.Pointer, Length);
+            }
+            return new SpanPair<T1>(startIndex, TimeViewer.Data.AsSpan(startIndex, Length), data);
+        }
     }
 }

@@ -69,7 +69,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Mqtt.Columns
 
         public SpanPair<long> GetCurrentLongs()
         {
-            return new SpanPair<long>(startIndex, index.data.AsSpan(startIndex, length), column.data.AsSpan(startIndex, length));
+            return new SpanPair<long>(StartIndex, index.data.AsSpan(StartIndex, Length), column.data.AsSpan(StartIndex, Length));
         }
     }
 
