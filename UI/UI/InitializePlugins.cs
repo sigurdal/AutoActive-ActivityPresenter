@@ -34,6 +34,7 @@ namespace SINTEF.AutoActive.UI
             typeof(ImportGenericTxt),
             typeof(ImportGaitupPlugin),
             typeof(ImportCsvCatapult),
+            typeof(ImportLoadsol),
             typeof(ImportGenericExcel),
             typeof(ImportGaitUpReults),
             typeof(ImportAnnotationPlugin)

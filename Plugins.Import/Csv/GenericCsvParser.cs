@@ -275,10 +275,10 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
 
         public static CsvConfiguration DefaultConfig => AlternativeConfigurations[0];
 
-        private static readonly CsvConfiguration[] AlternativeConfigurations = new CsvConfiguration[] {
+        private static readonly CsvConfiguration[] AlternativeConfigurations = {
             new CsvConfiguration(CultureInfo.InvariantCulture)
             {
-                Delimiter = ",",
+                Delimiter = ","
             },
             new CsvConfiguration(new CultureInfo("no-NB")) {
                 Delimiter = ";"
@@ -347,6 +347,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
             {
                 var types = new List<Type>();
                 config.LeaveOpen = true;
+
 
                 using (var reader = new StreamReader(stream, System.Text.Encoding.UTF8, true, 1024, true))
                 using (var csv = new CsvReader(reader, config))
@@ -427,7 +428,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
             var streamPos = stream.Position;
             try
             {
-                using (var reader = new StreamReader(stream, System.Text.Encoding.UTF8, true, 1024, true))
+                using (var reader = new StreamReader(stream, System.Text.Encoding.UTF8, true, 4096, true))
                 {
                     try
                     {
@@ -438,15 +439,14 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
                             csv.ReadHeader();
 
                             csv.Read();
-                            stream.Seek(streamPos, SeekOrigin.Begin);
                             var row = (IDictionary<string, object>) csv.GetRecord<dynamic>();
                             return row.Count > 1;
                         }
                     }
-                    catch (BadDataException)
+                    catch (BadDataException ex)
                     {
                     }
-                    catch (ReaderException)
+                    catch (ReaderException ex)
                     {
                     }
                 }
@@ -461,6 +461,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
 
         private static CsvConfiguration DetectConfiguration(Stream stream)
         {
+            var streamStartPos = stream.Position;
             foreach (var config in AlternativeConfigurations)
             {
                 if (TestConfiguration(stream, config))
@@ -472,7 +473,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
             var buf = new byte[512];
             stream.Read(buf, 0, buf.Length);
             var nextStreamPos = FindLikelyHeaderStart(buf, ',');
-            stream.Seek(nextStreamPos, SeekOrigin.Begin);
+            stream.Seek(nextStreamPos + streamStartPos, SeekOrigin.Begin);
 
             foreach (var config in AlternativeConfigurations)
             {
@@ -541,7 +542,7 @@ namespace SINTEF.AutoActive.Plugins.Import.Csv
         }
 
         // This method fails if there is a line that includes a , (comma) before the 'header' (e.g. Hyper IMU files)
-        public static (List<string>, List<Type>, List<Array>) Parse(Stream stream)
+        public (List<string>, List<Type>, List<Array>) Parse(Stream stream)
         {
             // I'm assuming that it is quicker to count the number of lines to initialize the lists for the output
             var lineCount = CountLines(stream);
